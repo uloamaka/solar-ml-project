@@ -1,0 +1,14 @@
+[Unit]
+Description=Solar forecasting FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User=uloamaka
+WorkingDirectory=/home/uloamaka/open_source_dev/sch_project/rasp_project/solar_ml_backend
+ExecStart=/home/uloamaka/open_source_dev/sch_project/rasp_project/solar_ml_backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

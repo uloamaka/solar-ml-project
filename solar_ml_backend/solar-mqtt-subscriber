@@ -1,0 +1,14 @@
+[Unit]
+Description=Solar MQTT telemetry subscriber
+After=network.target mosquitto.service
+
+[Service]
+Type=simple
+User=uloamaka
+WorkingDirectory=/home/uloamaka/open_source_dev/sch_project/rasp_project/solar_ml_backend
+ExecStart=/home/uloamaka/open_source_dev/sch_project/rasp_project/solar_ml_backend/venv/bin/python3 mqtt_subscriber.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
