@@ -1,12 +1,11 @@
-from typing import Optional
-
+import pandas as pd
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
-import xgboost as xgb
 
-import numpy as np
+from features import TZ
+from open_meteo import fetch_site_forecast
+from predictor import predict_batch
 
 app = FastAPI()
 
@@ -19,63 +18,36 @@ app.add_middleware(
 )
 
 
-# Load the trained model
-#model = joblib.load("xgb_model.pkl")
-
-
-model = xgb.XGBRegressor()
-model.load_model("xgb_model.json")
-
-class WeatherData(BaseModel):
-    year: float
-    ghi: float
-    dni: float
-    dhi: float
-    temp_air: float
-    relative_humidity: float
-    wind_speed: float
-    cloud_cover: float
-    clearness_index: Optional[float]
-    solar_zenith_angle: float
-    solar_azimuth: float
-
-
 @app.get("/")
 def home():
     return {"status": "FastAPI is running"}
 
 
-@app.post("/predict")
-def predict(weather: WeatherData):
-    features = np.array([[
-        weather.year,
-        weather.ghi,
-        weather.dni,
-        weather.dhi,
-        weather.temp_air,
-        weather.relative_humidity,
-        weather.wind_speed,
-        weather.cloud_cover,
-        weather.clearness_index,
-        weather.solar_zenith_angle,
-        weather.solar_azimuth
-    ]])
+@app.get("/predict")
+def predict():
+    now = pd.Timestamp.now(tz=TZ)
+    today = now.strftime('%Y-%m-%d')
+    tomorrow = (now + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 
-    print("\n==============================")
-    print("DATA RECEIVED FROM REACT")
-    print("==============================")
+    weather = fetch_site_forecast(start_date=today, end_date=tomorrow)
 
-    print("Temperature:", weather.temp_air)
-    print("Current Year:", weather.year)
+    current_hour = now.floor('h')
+    next_hour = current_hour + pd.Timedelta(hours=1)
+    window = weather.loc[weather.index.isin([current_hour, next_hour])]
 
-    prediction = float(model.predict(features)[0])
-    return {
-        "success": True,
-        "message": "FastAPI received the weather data",
-        "prediction": prediction
-    }
+    predictions = predict_batch(window)
+
+    result = []
+    for ts, row in predictions.iterrows():
+        pr = row['predicted_pr']
+        result.append({
+            "timestamp": ts.isoformat(),
+            "predicted_pr": None if pd.isna(pr) else float(pr),
+            "predicted_power_w": float(row['predicted_power_w']),
+        })
+
+    return {"success": True, "predictions": result}
 
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
