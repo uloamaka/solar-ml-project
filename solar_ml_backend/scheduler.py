@@ -11,17 +11,17 @@ NIGHTLY_TRIGGER_HOUR = 22
 def backfill_today():
     now = pd.Timestamp.now(tz=TZ)
     midnight = now.normalize()
-    missing = db.get_missing_hours(midnight, now.floor('h'))
-    if not missing:
-        return
+    cutoff = now.floor('h')
+    today_str = now.strftime('%Y-%m-%d')
 
-    start = missing[0].strftime('%Y-%m-%d')
-    end = missing[-1].strftime('%Y-%m-%d')
-    weather = fetch_site_forecast(start_date=start, end_date=end)
-    weather = weather.loc[weather.index.isin(missing)]
-
+    weather = fetch_site_forecast(start_date=today_str, end_date=today_str)
     predictions = predict_batch(weather)
-    db.insert_predictions(predictions, source='catchup')
+
+    past = predictions.loc[predictions.index < cutoff]
+    live = predictions.loc[predictions.index >= cutoff]
+
+    db.insert_predictions(past, source='catchup', mode='ignore')
+    db.insert_predictions(live, source='scheduled', mode='replace')
 
 
 def ensure_tomorrow(force=False):
@@ -30,16 +30,11 @@ def ensure_tomorrow(force=False):
         return
 
     tomorrow = (now + pd.Timedelta(days=1)).normalize()
-    tomorrow_end = tomorrow + pd.Timedelta(hours=23)
-    missing = db.get_missing_hours(tomorrow, tomorrow_end)
-    if not missing:
-        return
-
     day_str = tomorrow.strftime('%Y-%m-%d')
     weather = fetch_site_forecast(start_date=day_str, end_date=day_str)
 
     predictions = predict_batch(weather)
-    db.insert_predictions(predictions, source='scheduled')
+    db.insert_predictions(predictions, source='scheduled', mode='replace')
 
 
 def run_once(force_tomorrow=False):

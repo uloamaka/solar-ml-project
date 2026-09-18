@@ -1,7 +1,7 @@
 import sqlite3
 import pandas as pd
 
-DB_PATH = '/var/lib/solar_backend/predictions.db'
+DB_PATH = 'C:\\Users\\godsg\\Documents\\solar-ml-project\\solar_ml_backend\\data\\predictions.db'
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS predictions (
 )
 """
 
-INSERT_SQL = """
+INSERT_SQL_IGNORE = """
 INSERT OR IGNORE INTO predictions
 (timestamp, year, ghi, dni, dhi, temp_air, relative_humidity,
  wind_speed, cloud_cover, clearness_index, solar_zenith_angle,
@@ -32,6 +32,13 @@ INSERT OR IGNORE INTO predictions
 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 """
 
+INSERT_SQL_REPLACE = """
+INSERT OR REPLACE INTO predictions
+(timestamp, year, ghi, dni, dhi, temp_air, relative_humidity,
+ wind_speed, cloud_cover, clearness_index, solar_zenith_angle,
+ solar_azimuth, predicted_pr, predicted_power_w, source, generated_at)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+"""
 
 ACTUALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS actuals (
@@ -63,7 +70,9 @@ def insert_actual(timestamp, measured_power_w, db_path=DB_PATH):
     conn.close()
 
 
-def insert_predictions(df, source, db_path=DB_PATH):
+def insert_predictions(df, source, db_path=DB_PATH, mode='ignore'):
+    if df.empty:
+        return
     conn = get_connection(db_path)
     generated_at = pd.Timestamp.utcnow().isoformat()
     rows = [
@@ -74,7 +83,8 @@ def insert_predictions(df, source, db_path=DB_PATH):
          source, generated_at)
         for ts, r in df.iterrows()
     ]
-    conn.executemany(INSERT_SQL, rows)
+    sql = INSERT_SQL_REPLACE if mode == 'replace' else INSERT_SQL_IGNORE
+    conn.executemany(sql, rows)
     conn.commit()
     conn.close()
 
